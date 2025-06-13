@@ -13,7 +13,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Initialize Twilio Client
+// Initialize Twilio client
 const twilioClient = new Twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
@@ -22,12 +22,12 @@ const twilioClient = new Twilio(
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// ✅ Health Check
+// ✅ Health check
 app.get('/', (req, res) => {
   res.send('✅ Angela AI Agent is running.');
 });
 
-// ✅ Serve Converted WAV Audio
+// ✅ Serve the converted WAV file to Twilio
 app.get('/audio', (req, res) => {
   const filePath = path.join(__dirname, 'response.wav');
   if (fs.existsSync(filePath)) {
@@ -38,13 +38,13 @@ app.get('/audio', (req, res) => {
   }
 });
 
-// ✅ Main Voice Webhook
+// ✅ Main voice interaction webhook
 app.post('/voice', async (req, res) => {
   const twiml = new Twilio.twiml.VoiceResponse();
   const input = req.body.SpeechResult || req.body.Body || 'Hello, how can I help you today?';
 
   try {
-    // 🔹 1. Get GPT response
+    // 🔹 Step 1: Get response from GPT
     const gpt = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
@@ -52,7 +52,7 @@ app.post('/voice', async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: 'You are Angela, a calm and friendly business assistant from Apex Spark Media. Speak professionally and clearly.'
+            content: 'You are Angela, a calm and friendly business assistant from Apex Spark Media. Speak clearly and professionally.'
           },
           { role: 'user', content: input }
         ]
@@ -68,15 +68,15 @@ app.post('/voice', async (req, res) => {
     const reply = gpt.data.choices[0].message.content;
     console.log('🧠 GPT Reply:', reply);
 
-    // 🔹 2. Get ElevenLabs Audio (MP3)
+    // 🔹 Step 2: Get audio from ElevenLabs
     const audioResponse = await axios.post(
       `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
       {
         text: reply,
-        model_id: 'eleven_monolingual_v1',
+        model_id: 'eleven_multilingual_v2', // Higher quality
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75
+          stability: 0.3,
+          similarity_boost: 0.9
         }
       },
       {
@@ -90,11 +90,11 @@ app.post('/voice', async (req, res) => {
 
     fs.writeFileSync('response.mp3', audioResponse.data);
 
-    // 🔹 3. Convert to WAV (Twilio-compatible)
+    // 🔹 Step 3: Convert to Twilio-compatible WAV
     await new Promise((resolve, reject) => {
       ffmpeg('response.mp3')
         .audioChannels(1)
-        .audioFrequency(8000)
+        .audioFrequency(8000) // Twilio requirement
         .audioCodec('pcm_mulaw')
         .format('wav')
         .on('end', resolve)
@@ -102,7 +102,7 @@ app.post('/voice', async (req, res) => {
         .save('response.wav');
     });
 
-    // 🔹 4. Send WAV to Twilio
+    // 🔹 Step 4: Send audio to Twilio
     twiml.play(`${process.env.BASE_URL}/audio`);
     res.type('text/xml').send(twiml.toString());
 
@@ -114,7 +114,7 @@ app.post('/voice', async (req, res) => {
   }
 });
 
-// ✅ Outbound Call Trigger
+// ✅ Trigger outbound call
 app.get('/call-now', async (req, res) => {
   try {
     const call = await twilioClient.calls.create({
@@ -124,14 +124,14 @@ app.get('/call-now', async (req, res) => {
     });
 
     console.log('📞 Outbound call started:', call.sid);
-    res.send(`✅ Call initiated. SID: ${call.sid}`);
+    res.send(`✅ Call started. SID: ${call.sid}`);
   } catch (err) {
     console.error('❌ Error starting call:', err.message);
     res.status(500).send('Call failed.');
   }
 });
 
-// ✅ Start Server
+// ✅ Start server
 app.listen(port, () => {
-  console.log(`✅ Angela is live on port ${port}`);
+  console.log(`✅ Angela is live at http://localhost:${port}`);
 });
