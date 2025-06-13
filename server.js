@@ -95,22 +95,26 @@ app.post('/voice', async (req, res) => {
   }
 });
 
-// Start outbound call
+
+// Outbound Call Trigger
 app.get('/call-now', async (req, res) => {
+  const client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
   try {
-    const call = await twilioClient.calls.create({
-      url: `${process.env.BASE_URL}/voice`,
-      to: process.env.MY_PHONE_NUMBER,
-      from: process.env.TWILIO_PHONE_NUMBER
+    const call = await client.calls.create({
+      twiml: `<Response><Say>Hi there, this is Angela from Apex Spark Media. Just testing outbound call setup.</Say></Response>`,
+      to: process.env.MY_PHONE_NUMBER,         // <== THIS must exist in .env
+      from: process.env.TWILIO_PHONE_NUMBER    // <== Your Twilio Number
     });
 
-    console.log('📞 Outbound call started:', call.sid);
+    console.log("📞 Outbound call started:", call.sid);
     res.send(`✅ Call initiated. SID: ${call.sid}`);
   } catch (error) {
-    console.error('❌ Error starting call:', error.message);
-    res.status(500).send('Failed to start call.');
+    console.error("❌ Error starting call:", error.message);
+    res.status(500).send("Failed to start call.");
   }
 });
+
 
 // Start the server
 app.listen(port, () => {
