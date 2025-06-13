@@ -3,13 +3,18 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 const { Twilio } = require('twilio');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('ffmpeg-static');
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Twilio client
-const twilioClient = require('twilio')(
+// Initialize Twilio Client
+const twilioClient = new Twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
@@ -17,36 +22,39 @@ const twilioClient = require('twilio')(
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// Health check
+// ✅ Health Check
 app.get('/', (req, res) => {
   res.send('✅ Angela AI Agent is running.');
 });
 
-// Serve audio file to Twilio
+// ✅ Serve Converted WAV Audio
 app.get('/audio', (req, res) => {
-  const audioPath = __dirname + '/response.mp3';
-  if (fs.existsSync(audioPath)) {
-    res.set('Content-Type', 'audio/mpeg');
-    res.sendFile(audioPath);
+  const filePath = path.join(__dirname, 'response.wav');
+  if (fs.existsSync(filePath)) {
+    res.set('Content-Type', 'audio/wav');
+    res.sendFile(filePath);
   } else {
-    res.status(404).send('Audio not found.');
+    res.status(404).send('Audio file not found.');
   }
 });
 
-// Voice webhook - triggered by Twilio on call connect
+// ✅ Main Voice Webhook
 app.post('/voice', async (req, res) => {
   const twiml = new Twilio.twiml.VoiceResponse();
-  const userSpeech = req.body.SpeechResult || req.body.Body || 'Hello, how can I help you today?';
+  const input = req.body.SpeechResult || req.body.Body || 'Hello, how can I help you today?';
 
   try {
-    // Get GPT-4 response
-    const gptResponse = await axios.post(
+    // 🔹 1. Get GPT response
+    const gpt = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
         model: 'gpt-4',
         messages: [
-          { role: 'system', content: 'You are Angela, a calm, helpful female business assistant who answers with short, professional sentences.' },
-          { role: 'user', content: userSpeech }
+          {
+            role: 'system',
+            content: 'You are Angela, a calm and friendly business assistant from Apex Spark Media. Speak professionally and clearly.'
+          },
+          { role: 'user', content: input }
         ]
       },
       {
@@ -57,14 +65,15 @@ app.post('/voice', async (req, res) => {
       }
     );
 
-    const responseText = gptResponse.data.choices[0].message.content;
+    const reply = gpt.data.choices[0].message.content;
+    console.log('🧠 GPT Reply:', reply);
 
-    // Get ElevenLabs audio
-    const audio = await axios.post(
+    // 🔹 2. Get ElevenLabs Audio (MP3)
+    const audioResponse = await axios.post(
       `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
       {
-        text: responseText,
-        model_id: "eleven_monolingual_v1",
+        text: reply,
+        model_id: 'eleven_monolingual_v1',
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75
@@ -79,44 +88,50 @@ app.post('/voice', async (req, res) => {
       }
     );
 
-    fs.writeFileSync('response.mp3', audio.data);
+    fs.writeFileSync('response.mp3', audioResponse.data);
 
-    // Respond with TwiML to play the audio
-    twiml.play(`${req.protocol}://${req.get('host')}/audio`);
-    res.type('text/xml');
-    res.send(twiml.toString());
-
-  } catch (error) {
-    console.error('❌ Error during voice processing:', error.message);
-    const fallback = new Twilio.twiml.VoiceResponse();
-    fallback.say('Sorry, something went wrong. Please try again later.');
-    res.type('text/xml');
-    res.send(fallback.toString());
-  }
-});
-
-
-// Outbound Call Trigger
-app.get('/call-now', async (req, res) => {
-  const client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
-  try {
-    const call = await client.calls.create({
-      twiml: `<Response><Say>Hi there, this is Angela from Apex Spark Media. Just testing outbound call setup.</Say></Response>`,
-      to: process.env.MY_PHONE_NUMBER,         // <== THIS must exist in .env
-      from: process.env.TWILIO_PHONE_NUMBER    // <== Your Twilio Number
+    // 🔹 3. Convert to WAV (Twilio-compatible)
+    await new Promise((resolve, reject) => {
+      ffmpeg('response.mp3')
+        .audioChannels(1)
+        .audioFrequency(8000)
+        .audioCodec('pcm_mulaw')
+        .format('wav')
+        .on('end', resolve)
+        .on('error', reject)
+        .save('response.wav');
     });
 
-    console.log("📞 Outbound call started:", call.sid);
-    res.send(`✅ Call initiated. SID: ${call.sid}`);
+    // 🔹 4. Send WAV to Twilio
+    twiml.play(`${process.env.BASE_URL}/audio`);
+    res.type('text/xml').send(twiml.toString());
+
   } catch (error) {
-    console.error("❌ Error starting call:", error.message);
-    res.status(500).send("Failed to start call.");
+    console.error('❌ Voice error:', error.message);
+    const fallback = new Twilio.twiml.VoiceResponse();
+    fallback.say('Sorry, something went wrong.');
+    res.type('text/xml').send(fallback.toString());
   }
 });
 
+// ✅ Outbound Call Trigger
+app.get('/call-now', async (req, res) => {
+  try {
+    const call = await twilioClient.calls.create({
+      url: `${process.env.BASE_URL}/voice`,
+      to: process.env.MY_PHONE_NUMBER,
+      from: process.env.TWILIO_PHONE_NUMBER
+    });
 
-// Start the server
+    console.log('📞 Outbound call started:', call.sid);
+    res.send(`✅ Call initiated. SID: ${call.sid}`);
+  } catch (err) {
+    console.error('❌ Error starting call:', err.message);
+    res.status(500).send('Call failed.');
+  }
+});
+
+// ✅ Start Server
 app.listen(port, () => {
-  console.log(`✅ Server is live on port ${port}`);
+  console.log(`✅ Angela is live on port ${port}`);
 });
