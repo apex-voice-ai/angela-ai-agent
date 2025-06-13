@@ -91,6 +91,23 @@ app.post('/voice', async (req, res) => {
     res.send(fallback.toString());
   }
 });
+// Add this above app.listen
+app.get('/call-now', async (req, res) => {
+  try {
+    const client = require('twilio')(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
+    const call = await client.calls.create({
+      url: `${req.protocol}://${req.get('host')}/voice`, // Angela's script
+      to: process.env.TO_NUMBER, // number to call
+      from: process.env.TWILIO_PHONE_NUMBER
+    });
+
+    console.log('📞 Outbound call started:', call.sid);
+    res.send('✅ Call started');
+  } catch (error) {
+    console.error('❌ Failed to start call:', error.message);
+    res.status(500).send('Failed to start call');
+  }
+});
 
 // ✅ Start server
 app.listen(port, () => {
