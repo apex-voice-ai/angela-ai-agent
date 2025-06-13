@@ -1,7 +1,7 @@
 {
-  "name": "ai-voice-agent-angela",
+  "name": "angela-ai-agent",
   "version": "1.0.0",
-  "description": "AI voice agent Angela using GPT, ElevenLabs, and Twilio to book calls and handle objections",
+  "description": "AI Voice Agent for outbound calls using GPT, ElevenLabs, and Twilio",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -13,19 +13,12 @@
     "express": "^4.18.2",
     "twilio": "^4.15.0",
     "xmlbuilder2": "^3.0.2",
-    "uuid": "^9.0.0"
+    "fluent-ffmpeg": "^2.1.3",
+    "ffmpeg-static": "^4.4.0"
   },
   "engines": {
     "node": "14.x"
   },
-  "license": "MIT",
-  "keywords": [
-    "twilio",
-    "elevenlabs",
-    "voice-agent",
-    "ai",
-    "booking",
-    "calendly",
-    "sales"
-  ]
+  "author": "Apex Spark Media",
+  "license": "MIT"
 }
