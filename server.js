@@ -90,18 +90,18 @@ app.get('/', (req, res) => {
 
 // ✅ Trigger outbound call manually
 app.get('/call-now', async (req, res) => {
-  const client = new Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
   try {
     const call = await client.calls.create({
       url: `${process.env.BASE_URL}/voice`,
-      to: process.env.MY_PHONE_NUMBER,
-      from: process.env.TWILIO_PHONE_NUMBER
+      to: process.env.MY_PHONE_NUMBER,        // <-- Make sure this is defined in .env
+      from: process.env.TWILIO_PHONE_NUMBER   // <-- Must be a Twilio voice number
     });
+
     console.log('📞 Outbound call started:', call.sid);
-    res.send(`Call started: ${call.sid}`);
-  } catch (err) {
-    console.error('❌ Error starting call:', err.message);
-    res.status(500).send('Call failed.');
+    res.send(`✅ Call initiated. SID: ${call.sid}`);
+  } catch (error) {
+    console.error('❌ Error starting call:', error.message);
+    res.status(500).send('Failed to start call.');
   }
 });
 
