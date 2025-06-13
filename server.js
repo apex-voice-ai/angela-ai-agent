@@ -9,7 +9,7 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const { Twilio } = require('twilio');
+const twilio = require('twilio');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
 
@@ -45,7 +45,7 @@ app.get('/audio', (req, res) => {
 
 // ✅ Main Voice Webhook
 app.post('/voice', async (req, res) => {
-  const twiml = new Twilio.twiml.VoiceResponse();
+  const twiml = new twilio.twiml.VoiceResponse();
   const input = req.body.SpeechResult || req.body.Body || 'Hello, how can I help you today?';
 
   try {
@@ -118,7 +118,7 @@ app.post('/voice', async (req, res) => {
     res.type('text/xml').send(twiml.toString());
   } catch (error) {
     console.error('❌ Voice error:', error.message);
-    const fallback = new Twilio.twiml.VoiceResponse();
+    const fallback = new twilio.twiml.VoiceResponse();
     fallback.say('Sorry, there was an error processing your request.');
     res.type('text/xml').send(fallback.toString());
   }
